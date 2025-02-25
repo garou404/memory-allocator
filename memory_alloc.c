@@ -23,8 +23,13 @@ void memory_init() {
 
 /* Return the number of consecutive blocks starting from first */
 int nb_consecutive_blocks(int first) {
-  /* TODO */
-  return -1;
+  int index = first;
+  int nb_consecutive_blocks = 1;
+  while(index+1 == m.blocks[index]){
+    nb_consecutive_blocks++;
+    index++;
+  }
+  return nb_consecutive_blocks;
 }
 
 /* Reorder memory blocks */
@@ -36,8 +41,31 @@ void memory_reorder() {
  * return NULL_BLOCK in case of an error
  */
 int memory_allocate(size_t size) {
-  /* TODO */
-  return NULL_BLOCK;
+  
+  int index = m.first_block;
+  int block_nb_needed = size / 8;
+  if(size % 8 != 0) { block_nb_needed++; }
+  if(nb_consecutive_blocks(index) < block_nb_needed){ // case where the needed nb of blocks is not available on first block
+    while(nb_consecutive_blocks(m.blocks[index]) < block_nb_needed){
+      index = m.blocks[index];
+      if(m.blocks[index] == NULL_BLOCK){
+        m.error_no = E_NOMEM;
+        return NULL_BLOCK;
+      }
+    }
+    int first_block = m.blocks[index];
+    m.blocks[index] = m.blocks[first_block + block_nb_needed-1];
+    initialize_buffer(first_block, size);
+    m.available_blocks-=block_nb_needed;
+    m.error_no = E_SUCCESS;
+    return first_block;
+  }else{ // case where the needed nb of blocks is available on first block
+    m.available_blocks-=block_nb_needed;
+    m.error_no = E_SUCCESS;
+    m.first_block = m.blocks[index + block_nb_needed-1];
+    initialize_buffer(index, size);
+    return index;
+  }
 }
 
 /* Free the block of data starting at address */
@@ -54,7 +82,13 @@ void memory_print() {
   printf("\tError_no: "); memory_error_print(m.error_no);
   printf("\tContent:  ");
 
-  /* TODO: browse the available blocks and print their index */
+  int address = m.first_block;
+  printf("[%d]", address);
+  while(m.blocks[address] != NULL_BLOCK) {
+    printf(" -> [%ld]", m.blocks[address]);
+    address = m.blocks[address];
+  }
+  printf(" -> NULL_BLOCK");
 
   printf("\n");
   printf("---------------------------------\n");
@@ -87,6 +121,7 @@ void memory_error_print(enum memory_errno error_number) {
     printf("Not enough contiguous blocks\n");
     break;
   default:
+    printf("Unknown\n");
     break;
   }
 }
@@ -179,7 +214,7 @@ void test_exo1_nb_consecutive_blocks_at_beginning_linked_list(){
 /* Test nb_consecutive_block() at the middle of the available blocks list */
 void test_exo1_nb_consecutive_blocks_at_middle_linked_list(){
   init_m_with_some_allocated_blocks();
-
+  // memory_print();
   assert_int_equal(3, nb_consecutive_blocks(3));
 }
 
