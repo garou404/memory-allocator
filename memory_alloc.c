@@ -10,7 +10,15 @@ struct memory_alloc_t m;
 
 /* Initialize the memory allocator */
 void memory_init() {
-  /* TODO */
+  m.available_blocks = DEFAULT_SIZE;
+  m.first_block = 0;
+  int i;
+  for (i = 0; i < DEFAULT_SIZE-1; i++)
+  {
+    m.blocks[i] = i+1;
+  }
+  m.blocks[i] = NULL_BLOCK;
+  m.error_no = E_SUCCESS;
 }
 
 /* Return the number of consecutive blocks starting from first */
