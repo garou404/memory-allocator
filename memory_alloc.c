@@ -70,7 +70,18 @@ int memory_allocate(size_t size) {
 
 /* Free the block of data starting at address */
 void memory_free(int address, size_t size) {
-  /* TODO */
+  int block_nb = size / 8;
+  if(size % 8 != 0) { block_nb++; }
+  printf("block nb: %d\n", block_nb);
+  for (int i = address; i < address+block_nb; i++)
+  {
+    m.blocks[i] = i+1;
+  }
+  m.blocks[address+block_nb-1] = m.first_block;
+  m.first_block = address;
+  m.available_blocks += block_nb;
+  m.error_no = E_SUCCESS;
+  
 }
 
 /* Print information on the available blocks of the memory allocator */
