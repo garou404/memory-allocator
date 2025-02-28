@@ -34,7 +34,41 @@ int nb_consecutive_blocks(int first) {
 
 /* Reorder memory blocks */
 void memory_reorder() {
-  /* TODO (exercise 2) */
+  // int t = m.first_block;
+  for(int i = m.available_blocks; i > 1; i--){
+    int test = 0;
+    for(int u = 0; u < i-1; u++) {
+      // printf("u %d, i %d\n", u, i);
+      // printf("(m.blocks[t] %ld > %ld m.blocks[m.blocks[t]])\n", m.blocks[t], m.blocks[m.blocks[t]]);
+      if(u==0){
+        printf("m.first_block %d > %ld m.blocks[m.first_block]\n", m.first_block, m.blocks[m.first_block]);
+        if(m.first_block > m.blocks[m.first_block]){
+          memory_page_t blo = m.blocks[m.first_block];
+          memory_page_t bloblo = m.blocks[m.blocks[m.first_block]];
+          m.blocks[m.blocks[m.first_block]] = m.first_block;
+          m.blocks[m.first_block] = bloblo;
+          printf("blo: %ld\n", blo);
+          m.first_block = blo;
+        }
+        test = m.first_block;
+      }else{
+        printf("rest : %d\n", test);
+        printf("m.blocks[test] %ld > %ld m.blocks[m.blocks[test]]\n", m.blocks[test], m.blocks[m.blocks[test]]);
+        if(m.blocks[test] > m.blocks[m.blocks[test]]){
+          memory_page_t blo = m.blocks[test]; //8
+          memory_page_t bloblo = m.blocks[m.blocks[test]]; //4
+          memory_page_t blobloblo = m.blocks[m.blocks[m.blocks[test]]]; //5
+          m.blocks[m.blocks[m.blocks[test]]] = blo;
+          m.blocks[m.blocks[test]] = blobloblo;
+          m.blocks[test] = bloblo;
+        }
+        test = m.blocks[test];
+      }
+      memory_print();
+
+    }
+    printf("\n");
+  }
 }
 
 /* Allocate size bytes
@@ -336,9 +370,9 @@ void test_exo1_memory_free(){
 /* Test memory_reorder() */
 void test_exo2_memory_reorder(){
   init_m_with_some_allocated_blocks();
-
+  memory_print();
   memory_reorder();
-  
+  // memory_print();
   // We check that m contains: [1]->[3]->[4]->[5]->[8]->[9]->[11]->[12]->[13]->[14]->NULL_BLOCK
   assert_int_equal(1, m.first_block);
 
