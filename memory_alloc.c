@@ -137,15 +137,20 @@ void memory_print() {
 }
 
 int memory_lifelike_malloc(size_t size) {
+  // will look for size + 1 blocks
+  // will return the addr of the second block
   /* TODO (exercise 3) */
   return NULL_BLOCK;
 }
 
 void memory_lifelike_free(int addr) {
+  // will read the nb of blocks at addr-1
+  // and free normally
   /* TODO (exercise 3) */
 }
 
 int memory_lifelike_realloc(int addr, size_t size){
+  //
   /* TODO (exercise 3) */
   return NULL_BLOCK;
 }
@@ -175,11 +180,6 @@ void initialize_buffer(int start_index, size_t size) {
     ptr[i]=0;
   }
 }
-
-
-
-
-
 
 /*************************************************/
 /*             Test functions                    */
@@ -433,6 +433,46 @@ void test_exo2_memory_reorder_leading_to_failed_memory_allocate(){
   assert_int_equal(E_SHOULD_PACK, m.error_no);
 }
 
+/* Initialize m with some allocated blocks. The 10 available blocks are: [0]->[1]->[4]->[5]->[9]->[10]->[15]->NULL_BLOCK */
+void init_m_with_some_allocated_blocks_lifelike() {
+  struct memory_alloc_t m_init = {
+    // 0 1   2    3      4    5    6    7    8     9   10   11   12    13    14    15
+    {1,  4,  1,   A_B,   5,   6,   7,   8,   9,   10,  15,   3,  A_B,  A_B,  A_B,  NULL_BLOCK},
+    10,
+    0,
+    INT32_MIN // We initialize error_no with a value which we are sure that it cannot be set by the different memory_...() functions
+  };
+  m = m_init;
+}
+
+void test_exo3_memory_alloc_lifelike(){
+  init_m_with_some_allocated_blocks_lifelike();
+  size_t block_needed = 4;
+  int initial_block_available = m.available_blocks;
+  int addr = memory_lifelike_malloc(block_needed*8);
+  // check that we remove the n + 1 blocks required from the available counter
+  assert_int_equal(initial_block_available-block_needed-1, m.available_blocks);
+  // check that the nb of blocks is stored in addr-1
+  assert_int_equal(m.blocks[addr-1], block_needed);
+  assert_int_equal(m.blocks[1], 9);
+}
+
+void test_exo3_memory_free_lifelike(){
+  init_m_with_some_allocated_blocks_lifelike();
+  size_t block_needed = 4;
+  int addr = memory_lifelike_malloc(block_needed*8);
+  int block_available_after_malloc = m.available_blocks;
+  memory_lifelike_free(addr);
+  // check that we have the good nb of available blocks after free
+  asser_int_equal(block_available_after_malloc+block_needed+1, m.available_blocks);
+}
+
+void test_exo3_memory_realloc_lifelike(){
+  // to do
+  // memory_lifelike_realloc();
+}
+
+
 int main(int argc, char**argv) {
   const struct CMUnitTest tests[] = {
     /* a few tests for exercise 1.
@@ -459,7 +499,18 @@ int main(int argc, char**argv) {
 
     cmocka_unit_test(test_exo2_memory_reorder),
     cmocka_unit_test(test_exo2_memory_reorder_leading_to_successful_memory_allocate),
-    cmocka_unit_test(test_exo2_memory_reorder_leading_to_failed_memory_allocate)
+    cmocka_unit_test(test_exo2_memory_reorder_leading_to_failed_memory_allocate),
+
+    /* a few tests for exercise 3.
+     */
+    // test that when malloc check val at addr-1 is the size that was asked when malloc
+    // mem allocate check nb of available blocks 
+    // free check nb of available blocks again
+    // malloc 2 blocks while only 2 clocks consecutive are available => error
+    cmocka_unit_test(test_exo3_memory_alloc_lifelike),
+    cmocka_unit_test(test_exo3_memory_free_lifelike),
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike)
+
   };
   return cmocka_run_group_tests(tests, NULL, NULL);
 }
