@@ -139,7 +139,42 @@ void memory_print() {
 int memory_lifelike_malloc(size_t size) {
   // will look for size + 1 blocks
   // will return the addr of the second block
-  /* TODO (exercise 3) */
+  int index = m.first_block;
+  int block_nb_needed = size / 8;
+  if(size % 8 != 0) { block_nb_needed++; }
+  block_nb_needed++; // add one block needed to store the nb of blocks
+  if(nb_consecutive_blocks(index) < block_nb_needed){ // case where the needed nb of blocks is not available on first block
+    while(nb_consecutive_blocks(m.blocks[index]) < block_nb_needed){
+      index = m.blocks[index];
+      if(m.blocks[index] == NULL_BLOCK){
+        memory_reorder();
+        index = m.first_block;
+        while(nb_consecutive_blocks(m.blocks[index]) < block_nb_needed){ // we check again after memory reorder
+          index = m.blocks[index];
+          if(m.blocks[index] == NULL_BLOCK){
+            m.error_no = E_SHOULD_PACK;
+            return NULL_BLOCK;
+          }
+        }
+        break; // jump out of the while
+      }
+    }
+    int first_block = m.blocks[index];
+    m.blocks[index] = m.blocks[first_block + block_nb_needed-1];
+    m.blocks[first_block] = block_nb_needed*8; // Store the size in bytes needed
+    initialize_buffer(first_block+1, size);
+    m.available_blocks-=block_nb_needed;
+    m.error_no = E_SUCCESS;
+    return first_block+1;
+
+  }else{ // case where the needed nb of blocks is available on first block
+    m.available_blocks-=block_nb_needed;
+    m.error_no = E_SUCCESS;
+    m.first_block = m.blocks[index + block_nb_needed-1];
+    m.blocks[index] = block_nb_needed-1; // Store the size in bytes needed
+    initialize_buffer(index+1, size);
+    return index+1;
+  }
   return NULL_BLOCK;
 }
 
@@ -147,6 +182,14 @@ void memory_lifelike_free(int addr) {
   // will read the nb of blocks at addr-1
   // and free normally
   /* TODO (exercise 3) */
+  int block_nb = m.blocks[addr-1]/8;
+  for (int i = addr-1; i < (addr-1)+block_nb-1; i++) {
+    m.blocks[i] = i+1;
+  }
+  m.blocks[(addr-1)+block_nb-1] = m.first_block;
+  m.first_block = addr;
+  m.available_blocks += block_nb;
+  m.error_no = E_SUCCESS;
 }
 
 int memory_lifelike_realloc(int addr, size_t size){
