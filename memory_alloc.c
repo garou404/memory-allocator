@@ -193,7 +193,15 @@ void memory_lifelike_free(int addr) {
 }
 
 int memory_lifelike_realloc(int addr, size_t size){
-  //
+  // case size > previous_size => copy past content, new mem won't be initialiized
+  // case size == previous_size => nothing to do
+  // case size < previous_size => remove content not in cur size
+  // case addr = NULL_BLOCKS => malloc
+  // case size = 0 => free
+  // case addr = must be returned value of malloc or NULL_BLOCK
+  // if area is moved, it must be freed
+
+
   /* TODO (exercise 3) */
   return NULL_BLOCK;
 }
@@ -480,8 +488,33 @@ void test_exo2_memory_reorder_leading_to_failed_memory_allocate(){
 void init_m_with_some_allocated_blocks_lifelike() {
   struct memory_alloc_t m_init = {
     // 0 1   2    3      4    5    6    7    8     9   10   11   12    13    14    15
-    {1,  4,  1,   A_B,   5,   6,   7,   8,   9,   10,  15,   3,  A_B,  A_B,  A_B,  NULL_BLOCK},
+    {1,  4,  8,   A_B,   5,   6,   7,   8,   9,   10,  15,   32,  A_B,  A_B,  A_B,  NULL_BLOCK},
     10,
+    0,
+    INT32_MIN // We initialize error_no with a value which we are sure that it cannot be set by the different memory_...() functions
+  };
+  m = m_init;
+}
+
+/* Initialize m with some allocated blocks. The 10 available blocks are: [0]->[1]->[4]->[5]->[9]->[10]->[15]->NULL_BLOCK */
+void init_m_with_some_allocated_blocks_lifelike_free_old_area() {
+  struct memory_alloc_t m_init = {
+    // 0 1   2    3      4    5      6    7    8     9   10   11    12    13    14    15
+    {1,  4,  8,   A_B,   8,   A_B,   7,   8,   9,   10,  15,  32,  A_B,  A_B,  A_B,  NULL_BLOCK},
+    8,
+    0,
+    INT32_MIN // We initialize error_no with a value which we are sure that it cannot be set by the different memory_...() functions
+  };
+  m = m_init;
+}
+
+
+/* Initialize m with some allocated blocks. The 10 available blocks are: [0]->[1]->[4]->[5]->[9]->[10]->[15]->NULL_BLOCK */
+void init_m_with_some_allocated_blocks_lifelike_not_enough_space() {
+  struct memory_alloc_t m_init = {
+    // 0 1    2      3      4     5    6    7     8     9     10    11    12   13           14  15
+    {5,  32,  A_B,   A_B,   A_B,  12,  48,  A_B,  A_B,  A_B,  A_B,  A_B,  13,  NULL_BLOCK,  8,  A_B},
+    4,
     0,
     INT32_MIN // We initialize error_no with a value which we are sure that it cannot be set by the different memory_...() functions
   };
@@ -495,9 +528,11 @@ void test_exo3_memory_alloc_lifelike(){
   int addr = memory_lifelike_malloc(block_needed*8);
   // check that we remove the n + 1 blocks required from the available counter
   assert_int_equal(initial_block_available-block_needed-1, m.available_blocks);
-  // check that the nb of blocks is stored in addr-1
-  assert_int_equal(m.blocks[addr-1], block_needed);
+  // printf("m.blocks[addr-1] %ld, block_needed*8+8 %ld, m.blocks[addr] %ld\n", m.blocks[addr-1], block_needed*8+8, m.blocks[addr]);
+  // check that the nb of bytes required is stored in addr-1
+  assert_int_equal(m.blocks[addr-1], block_needed*8+8);
   assert_int_equal(m.blocks[1], 9);
+  assert_int_equal(E_SUCCESS, m.error_no);
 }
 
 void test_exo3_memory_free_lifelike(){
@@ -507,12 +542,95 @@ void test_exo3_memory_free_lifelike(){
   int block_available_after_malloc = m.available_blocks;
   memory_lifelike_free(addr);
   // check that we have the good nb of available blocks after free
-  asser_int_equal(block_available_after_malloc+block_needed+1, m.available_blocks);
+  assert_int_equal(block_available_after_malloc+block_needed+1, m.available_blocks);
+  assert_int_equal(m.first_block, 4);
+  assert_int_equal(m.blocks[4], 5);
+  assert_int_equal(m.blocks[5], 6);
+  assert_int_equal(m.blocks[6], 7);
+  assert_int_equal(m.blocks[7], 8);
+  assert_int_equal(m.blocks[8], 9);
+  assert_int_equal(m.blocks[9], 0);
+  assert_int_equal(E_SUCCESS, m.error_no);
 }
 
-void test_exo3_memory_realloc_lifelike(){
-  // to do
-  // memory_lifelike_realloc();
+
+void test_exo3_memory_realloc_lifelike_new_size_sup(){
+  init_m_with_some_allocated_blocks_lifelike();
+  int addr = 3;
+  int prev_available_blocks = m.available_blocks;
+  realloc(addr, 24);
+  assert_int_equal(m.blocks[addr-1], 32);
+  assert_int_equal(m.blocks[1], 6);
+  assert_int_equal(m.available_blocks+2, prev_available_blocks);
+  assert_int_equal(E_SUCCESS, m.error_no);
+
+}
+
+void test_exo3_memory_realloc_lifelike_new_size_equ(){
+  init_m_with_some_allocated_blocks_lifelike();
+  int addr = 3;
+  int prev_available_blocks = m.available_blocks;
+  realloc(addr, 8);
+  assert_int_equal(m.blocks[addr-1], 16);
+  assert_int_equal(m.blocks[1], 4);
+  assert_int_equal(m.available_blocks, prev_available_blocks);
+  assert_int_equal(E_SUCCESS, m.error_no);
+
+}
+
+void test_exo3_memory_realloc_lifelike_new_size_inf(){
+  init_m_with_some_allocated_blocks_lifelike();
+  int addr = 12;
+  int prev_available_blocks = m.available_blocks;
+  realloc(addr, 8);
+  assert_int_equal(m.blocks[addr-1], 16);
+  assert_int_equal(m.first_block, 13);
+  assert_int_equal(m.blocks[13], 14);
+  assert_int_equal(m.blocks[14], 0);
+  assert_int_equal(m.available_blocks-2, prev_available_blocks);
+  assert_int_equal(E_SUCCESS, m.error_no);
+}
+
+void test_exo3_memory_realloc_lifelike_size_null(){
+  init_m_with_some_allocated_blocks_lifelike();
+  int addr = 13;
+  int prev_available_blocks = m.available_blocks;
+  realloc(addr, 0); // behave like free
+  assert_int_equal(m.first_block, 2);
+  assert_int_equal(m.blocks[2], 3);
+  assert_int_equal(m.blocks[3], 0);
+  assert_int_equal(m.available_blocks, prev_available_blocks+2);
+}
+
+void test_exo3_memory_realloc_lifelike_addr_null_block(){
+  init_m_with_some_allocated_blocks_lifelike();
+  int prev_available_blocks = m.available_blocks;
+  realloc(NULL_BLOCK, 32); //behave like malloc
+  assert_int_equal(m.blocks[1], 9);
+  assert_int_equal(m.blocks[4], 40);
+  assert_int_equal(m.available_blocks, prev_available_blocks-5);
+}
+
+void test_exo3_memory_realloc_lifelike_old_area_free(){
+  init_m_with_some_allocated_blocks_lifelike_free_old_area();
+  int addr = 3;
+  int prev_available_blocks = m.available_blocks;
+  int new_addr = realloc(addr, 3*8);
+  assert_int_equal(m.first_block, 2);
+  assert_int_equal(m.blocks[2], 3);
+  assert_int_equal(m.blocks[3], 0);
+  assert_int_equal(new_addr, 7); // check address returned is good
+  assert_int_equal(m.blocks[6], 4*8); 
+  assert_int_equal(m.blocks[1], 10); 
+  assert_int_equal(m.available_blocks, prev_available_blocks-2);
+}
+
+void test_exo3_memory_realloc_lifelike_not_enough_memory(){
+  init_m_with_some_allocated_blocks_lifelike_not_enough_space();
+  int addr = 2;
+  int new_addr = realloc(addr, 48);
+  assert_int_equal(new_addr, NULL_BLOCK);
+  assert_int_equal(E_SHOULD_PACK, m.error_no);
 }
 
 
@@ -552,7 +670,13 @@ int main(int argc, char**argv) {
     // malloc 2 blocks while only 2 clocks consecutive are available => error
     cmocka_unit_test(test_exo3_memory_alloc_lifelike),
     cmocka_unit_test(test_exo3_memory_free_lifelike),
-    cmocka_unit_test(test_exo3_memory_realloc_lifelike)
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike_new_size_sup),
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike_new_size_equ),
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike_new_size_inf),
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike_size_null),
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike_addr_null_block),
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike_old_area_free),
+    cmocka_unit_test(test_exo3_memory_realloc_lifelike_not_enough_memory)
 
   };
   return cmocka_run_group_tests(tests, NULL, NULL);
