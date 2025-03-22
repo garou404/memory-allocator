@@ -141,7 +141,7 @@ int memory_lifelike_malloc(size_t size) {
   // will return the addr of the second block
   int index = m.first_block;
   int block_nb_needed = size / 8;
-  if(size % 8 != 0) { block_nb_needed++; }
+  if(size % 8 != 0) block_nb_needed++;
   block_nb_needed++; // add one block needed to store the nb of blocks
   if(nb_consecutive_blocks(index) < block_nb_needed){ // case where the needed nb of blocks is not available on first block
     while(nb_consecutive_blocks(m.blocks[index]) < block_nb_needed){
@@ -203,15 +203,18 @@ int memory_lifelike_realloc(int addr, size_t size){
 
   int block_nb_needed = size/8 + 1; // add one block to store the size
   if(size % 8 != 0) block_nb_needed++;
-  if(block_nb_needed*8 == m.blocks[addr-1]) return addr; // same size do nothing 
-  else if(block_nb_needed*8 < m.blocks[addr-1]){ // new size < cur size
+  if(block_nb_needed*8 == m.blocks[addr-1]) {
+    m.error_no = E_SUCCESS;
+    return addr; // same size do nothing 
+  }else if(block_nb_needed*8 < m.blocks[addr-1]){ // new size < cur size
     int nb_blocks_del = m.blocks[addr-1]/8 - block_nb_needed;
+    m.available_blocks+=m.blocks[addr-1]/8-block_nb_needed;
     m.blocks[addr-1] = block_nb_needed*8;
     for (int i=0; i < nb_blocks_del-1; i++) {
-      m.blocks[addr+block_nb_needed-2+i] = addr+block_nb_needed-1+i;
+      m.blocks[addr+block_nb_needed-1+i] = addr+block_nb_needed+i;
     }
     m.blocks[addr+block_nb_needed-2+nb_blocks_del] = m.first_block;
-    m.first_block = addr+block_nb_needed-2;
+    m.first_block = addr+block_nb_needed-1;
     m.error_no = E_SUCCESS;
     return addr;
   }else { // new size > cur size
@@ -219,9 +222,14 @@ int memory_lifelike_realloc(int addr, size_t size){
       memory_lifelike_free(addr);
       return memory_lifelike_malloc((block_nb_needed-1)*8);
     }else{ // enough space next to cur
-      m.blocks[addr-1] = block_nb_needed*8;
+      // printf("// enough space next to cur\n");
       int index = m.first_block;
-      while(m.blocks[index] != addr+-1) index = m.blocks[index];
+      // printf("addr+m.blocks[addr-1]/8-1 %ld\n", (addr+m.blocks[addr-1]/8-1));
+      while(m.blocks[index] != addr+m.blocks[addr-1]/8-1) index = m.blocks[index];
+      // printf("index: %d\n", index);
+      // printf("m.blocks[index] new value : %d\n", addr+block_nb_needed-1);
+      m.available_blocks-=block_nb_needed-m.blocks[addr-1]/8;
+      m.blocks[addr-1] = block_nb_needed*8;
       m.blocks[index] = addr+block_nb_needed-1;
       m.error_no = E_SUCCESS;
       return addr;
@@ -510,8 +518,8 @@ void test_exo2_memory_reorder_leading_to_failed_memory_allocate(){
 /* Initialize m with some allocated blocks. The 10 available blocks are: [0]->[1]->[4]->[5]->[9]->[10]->[15]->NULL_BLOCK */
 void init_m_with_some_allocated_blocks_lifelike() {
   struct memory_alloc_t m_init = {
-    // 0 1   2    3      4    5    6    7    8     9   10   11   12    13    14    15
-    {1,  4,  8,   A_B,   5,   6,   7,   8,   9,   10,  15,   32,  A_B,  A_B,  A_B,  NULL_BLOCK},
+    // 0 1   2     3      4    5    6    7    8     9   10    11   12    13    14    15
+    {1,  4,  16,   A_B,   5,   6,   7,   8,   9,   10,  15,   32,  A_B,  A_B,  A_B,  NULL_BLOCK},
     10,
     0,
     INT32_MIN // We initialize error_no with a value which we are sure that it cannot be set by the different memory_...() functions
@@ -522,8 +530,8 @@ void init_m_with_some_allocated_blocks_lifelike() {
 /* Initialize m with some allocated blocks. The 10 available blocks are: [0]->[1]->[4]->[5]->[9]->[10]->[15]->NULL_BLOCK */
 void init_m_with_some_allocated_blocks_lifelike_free_old_area() {
   struct memory_alloc_t m_init = {
-    // 0 1   2    3      4    5      6    7    8     9   10   11    12    13    14    15
-    {1,  4,  8,   A_B,   8,   A_B,   7,   8,   9,   10,  15,  32,  A_B,  A_B,  A_B,  NULL_BLOCK},
+    // 0 1   2    3       4    5      6    7    8     9    10   11   12    13    14    15
+    {1,  6,  16,   A_B,   16,   A_B,   7,   8,   9,   10,  15,  32,  A_B,  A_B,  A_B,  NULL_BLOCK},
     8,
     0,
     INT32_MIN // We initialize error_no with a value which we are sure that it cannot be set by the different memory_...() functions
@@ -615,7 +623,7 @@ void test_exo3_memory_realloc_lifelike_new_size_inf(){
 
 void test_exo3_memory_realloc_lifelike_size_null(){
   init_m_with_some_allocated_blocks_lifelike();
-  int addr = 13;
+  int addr = 3;
   int prev_available_blocks = m.available_blocks;
   memory_lifelike_realloc(addr, 0); // behave like free
   assert_int_equal(m.first_block, 2);
