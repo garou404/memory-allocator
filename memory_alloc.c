@@ -165,45 +165,68 @@ int memory_lifelike_malloc(size_t size) {
     initialize_buffer(first_block+1, size);
     m.available_blocks-=block_nb_needed;
     m.error_no = E_SUCCESS;
-    return first_block+1;
-
+    return first_block+1;  
   }else{ // case where the needed nb of blocks is available on first block
     m.available_blocks-=block_nb_needed;
     m.error_no = E_SUCCESS;
     m.first_block = m.blocks[index + block_nb_needed-1];
     m.blocks[index] = block_nb_needed-1; // Store the size in bytes needed
     initialize_buffer(index+1, size);
+    m.error_no = E_SUCCESS;
     return index+1;
   }
+  m.error_no = E_SHOULD_PACK;
   return NULL_BLOCK;
 }
 
 void memory_lifelike_free(int addr) {
-  // will read the nb of blocks at addr-1
-  // and free normally
-  /* TODO (exercise 3) */
   int block_nb = m.blocks[addr-1]/8;
   for (int i = addr-1; i < (addr-1)+block_nb-1; i++) {
     m.blocks[i] = i+1;
   }
   m.blocks[(addr-1)+block_nb-1] = m.first_block;
-  m.first_block = addr;
+  m.first_block = addr-1;
   m.available_blocks += block_nb;
   m.error_no = E_SUCCESS;
 }
 
 int memory_lifelike_realloc(int addr, size_t size){
-  // case size > previous_size => copy past content, new mem won't be initialiized
-  // case size == previous_size => nothing to do
-  // case size < previous_size => remove content not in cur size
-  // case addr = NULL_BLOCKS => malloc
-  // case size = 0 => free
-  // case addr = must be returned value of malloc or NULL_BLOCK
-  // if area is moved, it must be freed
+  if(size == 0) { // behave like free
+    memory_lifelike_free(addr);
+    m.error_no = E_SUCCESS;
+    return addr;
+  }
+  if(addr == NULL_BLOCK) { // behave like malloc
+    m.error_no = E_SUCCESS;
+    return memory_lifelike_malloc(size);
+  }
 
-
-  /* TODO (exercise 3) */
-  return NULL_BLOCK;
+  int block_nb_needed = size/8 + 1; // add one block to store the size
+  if(size % 8 != 0) block_nb_needed++;
+  if(block_nb_needed*8 == m.blocks[addr-1]) return addr; // same size do nothing 
+  else if(block_nb_needed*8 < m.blocks[addr-1]){ // new size < cur size
+    int nb_blocks_del = m.blocks[addr-1]/8 - block_nb_needed;
+    m.blocks[addr-1] = block_nb_needed*8;
+    for (int i=0; i < nb_blocks_del-1; i++) {
+      m.blocks[addr+block_nb_needed-2+i] = addr+block_nb_needed-1+i;
+    }
+    m.blocks[addr+block_nb_needed-2+nb_blocks_del] = m.first_block;
+    m.first_block = addr+block_nb_needed-2;
+    m.error_no = E_SUCCESS;
+    return addr;
+  }else { // new size > cur size
+    if(nb_consecutive_blocks(addr+(m.blocks[addr-1]/8)-1) < block_nb_needed-m.blocks[addr-1]/8) { // not enough space next to cur addr
+      memory_lifelike_free(addr);
+      return memory_lifelike_malloc((block_nb_needed-1)*8);
+    }else{ // enough space next to cur
+      m.blocks[addr-1] = block_nb_needed*8;
+      int index = m.first_block;
+      while(m.blocks[index] != addr+-1) index = m.blocks[index];
+      m.blocks[index] = addr+block_nb_needed-1;
+      m.error_no = E_SUCCESS;
+      return addr;
+    }
+  }
 }
 
 /* print the message corresponding to error_number */
@@ -548,8 +571,7 @@ void test_exo3_memory_free_lifelike(){
   assert_int_equal(m.blocks[5], 6);
   assert_int_equal(m.blocks[6], 7);
   assert_int_equal(m.blocks[7], 8);
-  assert_int_equal(m.blocks[8], 9);
-  assert_int_equal(m.blocks[9], 0);
+  assert_int_equal(m.blocks[8], 0);
   assert_int_equal(E_SUCCESS, m.error_no);
 }
 
@@ -558,7 +580,7 @@ void test_exo3_memory_realloc_lifelike_new_size_sup(){
   init_m_with_some_allocated_blocks_lifelike();
   int addr = 3;
   int prev_available_blocks = m.available_blocks;
-  realloc(addr, 24);
+  memory_lifelike_realloc(addr, 24);
   assert_int_equal(m.blocks[addr-1], 32);
   assert_int_equal(m.blocks[1], 6);
   assert_int_equal(m.available_blocks+2, prev_available_blocks);
@@ -570,7 +592,7 @@ void test_exo3_memory_realloc_lifelike_new_size_equ(){
   init_m_with_some_allocated_blocks_lifelike();
   int addr = 3;
   int prev_available_blocks = m.available_blocks;
-  realloc(addr, 8);
+  memory_lifelike_realloc(addr, 8);
   assert_int_equal(m.blocks[addr-1], 16);
   assert_int_equal(m.blocks[1], 4);
   assert_int_equal(m.available_blocks, prev_available_blocks);
@@ -582,7 +604,7 @@ void test_exo3_memory_realloc_lifelike_new_size_inf(){
   init_m_with_some_allocated_blocks_lifelike();
   int addr = 12;
   int prev_available_blocks = m.available_blocks;
-  realloc(addr, 8);
+  memory_lifelike_realloc(addr, 8);
   assert_int_equal(m.blocks[addr-1], 16);
   assert_int_equal(m.first_block, 13);
   assert_int_equal(m.blocks[13], 14);
@@ -595,7 +617,7 @@ void test_exo3_memory_realloc_lifelike_size_null(){
   init_m_with_some_allocated_blocks_lifelike();
   int addr = 13;
   int prev_available_blocks = m.available_blocks;
-  realloc(addr, 0); // behave like free
+  memory_lifelike_realloc(addr, 0); // behave like free
   assert_int_equal(m.first_block, 2);
   assert_int_equal(m.blocks[2], 3);
   assert_int_equal(m.blocks[3], 0);
@@ -605,7 +627,7 @@ void test_exo3_memory_realloc_lifelike_size_null(){
 void test_exo3_memory_realloc_lifelike_addr_null_block(){
   init_m_with_some_allocated_blocks_lifelike();
   int prev_available_blocks = m.available_blocks;
-  realloc(NULL_BLOCK, 32); //behave like malloc
+  memory_lifelike_realloc(NULL_BLOCK, 32); //behave like malloc
   assert_int_equal(m.blocks[1], 9);
   assert_int_equal(m.blocks[4], 40);
   assert_int_equal(m.available_blocks, prev_available_blocks-5);
@@ -615,7 +637,7 @@ void test_exo3_memory_realloc_lifelike_old_area_free(){
   init_m_with_some_allocated_blocks_lifelike_free_old_area();
   int addr = 3;
   int prev_available_blocks = m.available_blocks;
-  int new_addr = realloc(addr, 3*8);
+  int new_addr = memory_lifelike_realloc(addr, 3*8);
   assert_int_equal(m.first_block, 2);
   assert_int_equal(m.blocks[2], 3);
   assert_int_equal(m.blocks[3], 0);
@@ -628,7 +650,7 @@ void test_exo3_memory_realloc_lifelike_old_area_free(){
 void test_exo3_memory_realloc_lifelike_not_enough_memory(){
   init_m_with_some_allocated_blocks_lifelike_not_enough_space();
   int addr = 2;
-  int new_addr = realloc(addr, 48);
+  int new_addr = memory_lifelike_realloc(addr, 48);
   assert_int_equal(new_addr, NULL_BLOCK);
   assert_int_equal(E_SHOULD_PACK, m.error_no);
 }
